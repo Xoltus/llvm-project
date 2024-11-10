@@ -1088,12 +1088,43 @@ void addLayoutInfo(const NamedDecl &ND, HoverInfo &HI) {
         }
       }
     }
+
+    if (HI.Size && !RD->field_empty()) {
+      HI.Padding = 0;
+      const ASTRecordLayout &Layout = Ctx.getASTRecordLayout(RD);
+      auto NumFields = std::distance(RD->field_begin(), RD->field_end());
+      auto FieldIt = RD->field_begin();
+      for (; --NumFields; ++FieldIt) {
+        unsigned Offset = Layout.getFieldOffset(FieldIt->getFieldIndex());
+        unsigned NextOffset =
+            Layout.getFieldOffset(FieldIt->getFieldIndex() + 1);
+        if (auto Size = Ctx.getTypeSizeInCharsIfKnown(FieldIt->getType())) {
+          unsigned EndOfField = Offset + Size->getQuantity() * 8;
+          if (NextOffset > EndOfField) {
+            HI.Padding = *HI.Padding + NextOffset - EndOfField;
+          }
+        } else {
+          HI.Padding.reset();
+          break;
+        }
+      }
+      // We've processed all but the last field. If we still have valid Padding,
+      // finish the calculation
+      auto Size = Ctx.getTypeSizeInCharsIfKnown(FieldIt->getType());
+      if (HI.Padding && Size) {
+        unsigned Offset = Layout.getFieldOffset(FieldIt->getFieldIndex());
+        HI.Padding = *HI.Padding + *HI.Size - Offset - Size->getQuantity() * 8;
+      }
+    }
+
     if (HI.Size) {
       HI.RawSize = *HI.Size + AllocationTrackingBits;
       HI.AllocSize = kk::getAllocBucket(*HI.RawSize);
+      auto Padding = HI.Padding ? *HI.Padding : 0;
       if (HI.AllocSize)
-        HI.Util = *HI.Size * 100ull / *HI.AllocSize;
+        HI.Util = (*HI.Size - Padding) * 100ull / *HI.AllocSize;
     }
+
     return;
   }
 
