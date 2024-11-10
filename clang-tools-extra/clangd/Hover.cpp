@@ -22,6 +22,7 @@
 #include "clang-include-cleaner/IncludeSpeller.h"
 #include "clang-include-cleaner/Types.h"
 #include "index/SymbolCollector.h"
+#include "support/Logger.h"
 #include "support/Markup.h"
 #include "support/Trace.h"
 #include "clang/AST/ASTContext.h"
@@ -1048,6 +1049,45 @@ void addLayoutInfo(const NamedDecl &ND, HoverInfo &HI) {
       HI.Size = Size->getQuantity() * 8;
     if (!RD->isDependentType() && RD->isCompleteDefinition())
       HI.Align = Ctx.getTypeAlign(RD->getTypeForDecl());
+    if (!HI.Align && !RD->field_empty()) {
+      HI.Align = 0;
+      for (auto FieldIt = RD->field_begin(); FieldIt != RD->field_end();
+           ++FieldIt) {
+        if (uint64_t Align = Ctx.getTypeAlignIfKnown(FieldIt->getType()))
+           HI.Align = std::max(*HI.Align, Align);
+        else {
+          HI.Align.reset();
+          break;
+        }
+      }
+    }
+    if (!HI.Size && HI.Align) {
+      HI.Size = 0;
+      size_t Padding = 0;
+      for (auto FieldIt = RD->field_begin(); FieldIt != RD->field_end();
+           ++FieldIt) {
+        if (auto Size = Ctx.getTypeSizeInCharsIfKnown(FieldIt->getType())) {
+          uint64_t SizeBits = Size->getQuantity() * 8;
+          if (SizeBits < Padding) {
+            // Padding absorbs this field
+            Padding -= SizeBits;
+            continue;
+          }
+          // The type doesn't fit, so we're openening a new aligned field
+          size_t NumSpillOverBits = SizeBits % *HI.Align;
+          if (NumSpillOverBits)
+            Padding = *HI.Align - NumSpillOverBits;
+          else
+            Padding = 0;
+          // round up to the next alignment
+          uint64_t AlignedSize = ((SizeBits + *HI.Align - 1) / *HI.Align) * (*HI.Align);
+          HI.Size = *HI.Size + AlignedSize;
+        } else {
+          HI.Size.reset();
+          break;
+        }
+      }
+    }
     if (HI.Size) {
       HI.RawSize = *HI.Size + AllocationTrackingBits;
       HI.AllocSize = kk::getAllocBucket(*HI.RawSize);
