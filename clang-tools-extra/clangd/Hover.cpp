@@ -11,6 +11,7 @@
 #include "AST.h"
 #include "CodeCompletionStrings.h"
 #include "Config.h"
+#include "Feature.h"
 #include "FindTarget.h"
 #include "Headers.h"
 #include "IncludeCleaner.h"
@@ -59,8 +60,49 @@
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <vector>
+
+namespace kk {
+static std::vector<uint32_t> initAllocationBuckets() {
+#ifdef CLANGD_ALLOCATION_BUCKETS
+  std::string BucketsStr = CLANGD_ALLOCATION_BUCKETS;
+  std::vector<uint32_t> Buckets;
+  std::istringstream Stream(BucketsStr);
+  uint32_t Size = 0;
+
+  // Parse the comma-separated sizes into the vector
+  while (Stream >> Size) {
+    Buckets.push_back(Size);
+    if (Stream.peek() == ',')
+      Stream.ignore();
+  }
+  return Buckets;
+#else
+  return {};
+#endif
+}
+
+static const std::vector<uint32_t> AllocationBuckets = initAllocationBuckets();
+
+static std::optional<uint32_t> getAllocBucket(uint32_t AllocBits) {
+  for (uint32_t BucketBytes : AllocationBuckets) {
+    uint32_t const BucketBits = BucketBytes << 3;
+    if (BucketBits >= AllocBits) {
+      return BucketBits;
+    }
+  }
+  return std::nullopt;
+}
+} // namespace kk
+
+// Additional bits added to each allocation to store tracking information.
+#ifdef CLANGD_ALLOCATION_TRACKING_BYTES
+static constexpr uint64_t AllocationTrackingBits = CLANGD_ALLOCATION_TRACKING_BYTES << 3;
+#else
+static constexpr uint64_t AllocationTrackingBits = 0;
+#endif // CLANGD_ALLOCATION_TRACKING_BYTES
 
 namespace clang {
 namespace clangd {
@@ -1006,6 +1048,12 @@ void addLayoutInfo(const NamedDecl &ND, HoverInfo &HI) {
       HI.Size = Size->getQuantity() * 8;
     if (!RD->isDependentType() && RD->isCompleteDefinition())
       HI.Align = Ctx.getTypeAlign(RD->getTypeForDecl());
+    if (HI.Size) {
+      HI.RawSize = *HI.Size + AllocationTrackingBits;
+      HI.AllocSize = kk::getAllocBucket(*HI.RawSize);
+      if (HI.AllocSize)
+        HI.Util = *HI.Size * 100ull / *HI.AllocSize;
+    }
     return;
   }
 
@@ -1412,6 +1460,10 @@ static std::string formatSize(uint64_t SizeInBits) {
   return llvm::formatv("{0} {1}{2}", Value, Unit, Value == 1 ? "" : "s").str();
 }
 
+static std::string formatPercentage(uint64_t Value) {
+  return llvm::formatv("{0}%", Value).str();
+}
+
 // Offsets are shown in bytes + bits, so offsets of different fields
 // can always be easily compared.
 static std::string formatOffset(uint64_t OffsetInBits) {
@@ -1495,6 +1547,12 @@ markup::Document HoverInfo::present() const {
     }
     if (Align)
       P.appendText(", alignment " + formatSize(*Align));
+    if (RawSize)
+      P.appendText(", raw size " + formatSize(*RawSize));
+    if (AllocSize)
+      P.appendText(", allocation size " + formatSize(*AllocSize));
+    if (Util)
+      P.appendText(", utilization " + formatPercentage(*Util));
   }
 
   if (CalleeArgInfo) {

@@ -24,6 +24,9 @@ option(CLANGD_MALLOC_TRIM "Call malloc_trim(3) periodically in Clangd. (only tak
 # -DCLANG_TIDY_CHECKS=Off avoids a dependency on clang-tidy, reducing rebuilds.
 option(CLANGD_TIDY_CHECKS "Link all clang-tidy checks into clangd" ON)
 
+set(CLANGD_ALLOCATION_BUCKETS "" CACHE STRING "Allocation buckets the memory allocator uses")
+set(CLANGD_ALLOCATION_TRACKING_BYTES 0 CACHE STRING "Number of bytes added for tracking allocations")
+
 llvm_canonicalize_cmake_booleans(
   CLANGD_BUILD_XPC
   CLANGD_ENABLE_REMOTE

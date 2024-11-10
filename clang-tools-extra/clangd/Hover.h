@@ -99,6 +99,12 @@ struct HoverInfo {
   std::optional<uint64_t> Padding;
   /// Contains the alignment of fields and types where it's interesting.
   std::optional<uint64_t> Align;
+  /// Contains the size plus tacking overhead
+  std::optional<uint64_t> RawSize;
+  /// Contains the actual allocation size according to allocation buckets
+  std::optional<uint64_t> AllocSize;
+  /// Contains the utilization of the allocation bucket
+  std::optional<uint64_t> Util;
   // Set when symbol is inside function call. Contains information extracted
   // from the callee definition about the argument this is passed as.
   std::optional<Param> CalleeArgInfo;
