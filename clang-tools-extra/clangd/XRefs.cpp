@@ -1822,6 +1822,9 @@ static void fillSuperTypes(const CXXRecordDecl &CXXRD, llvm::StringRef TUPath,
   }
 
   for (const CXXRecordDecl *ParentDecl : typeParents(&CXXRD)) {
+    if (auto *CTSD = dyn_cast<ClassTemplateSpecializationDecl>(ParentDecl)) {
+      ParentDecl = CTSD->getTemplateInstantiationPattern();
+    }
     if (std::optional<TypeHierarchyItem> ParentSym =
             declToTypeHierarchyItem(*ParentDecl, TUPath)) {
       fillSuperTypes(*ParentDecl, TUPath, *ParentSym, RPSet);
@@ -1849,7 +1852,6 @@ std::vector<const CXXRecordDecl *> findRecordTypeAt(ParsedAST &AST,
     auto Decls = explicitReferenceTargets(N->ASTNode, DeclRelation::Underlying,
                                           AST.getHeuristicResolver());
     for (const NamedDecl *D : Decls) {
-
       if (const VarDecl *VD = dyn_cast<VarDecl>(D)) {
         // If this is a variable, use the type of the variable.
         if (const auto *RD = VD->getType().getTypePtr()->getAsCXXRecordDecl())
@@ -2141,7 +2143,6 @@ getTypeHierarchy(ParsedAST &AST, Position Pos, int ResolveLevels,
                  PathRef TUPath) {
   std::vector<TypeHierarchyItem> Results;
   for (const auto *CXXRD : findRecordTypeAt(AST, Pos)) {
-
     bool WantChildren = Direction == TypeHierarchyDirection::Children ||
                         Direction == TypeHierarchyDirection::Both;
 
