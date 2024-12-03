@@ -215,6 +215,10 @@ public:
     return FeatureModules ? FeatureModules->get<Mod>() : nullptr;
   }
 
+  /// Extract all files from compile_commands.json and queue them for
+  /// background indexing. This is called after ClangdLSPServer::onInitialize()
+  void indexAllFiles(std::optional<std::string> Dir);
+
   /// Add a \p File to the list of tracked C++ files or update the contents if
   /// \p File is already tracked. Also schedules parsing of the AST for it on a
   /// separate thread. When the parsing is complete, DiagConsumer passed in

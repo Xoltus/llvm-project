@@ -39,6 +39,7 @@
 #include "clang/Format/Format.h"
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Tooling/CompilationDatabase.h"
+#include "clang/Tooling/JSONCompilationDatabase.h"
 #include "clang/Tooling/Core/Replacement.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/STLExtras.h"
@@ -288,6 +289,25 @@ ClangdServer::~ClangdServer() {
       Mod.stop();
     for (auto &Mod : *FeatureModules)
       Mod.blockUntilIdle(Deadline::infinity());
+  }
+}
+
+void ClangdServer::indexAllFiles(std::optional<std::string> Dir)
+{
+  if (!Dir) {
+    return;
+  }
+
+  std::string Path = *Dir + "/compile_commands.json";
+  std::string ErrorMessage;
+  auto CDB = tooling::JSONCompilationDatabase::loadFromFile(
+      Path, ErrorMessage, tooling::JSONCommandLineSyntax::AutoDetect);
+  if (CDB) {
+    std::vector<std::string> Files = CDB->getAllFiles();
+    this->BackgroundIdx->enqueue(Files);
+  } else {
+    llvm::errs() << "ClangdServer::indexAllFiles failed to open " << Path
+                 << " with error " << ErrorMessage << "\n";
   }
 }
 

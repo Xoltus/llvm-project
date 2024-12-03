@@ -66,6 +66,12 @@ public:
 
     /// Flag to hint the experimental modules support is enabled.
     bool EnableExperimentalModulesSupport = false;
+
+    /// Hacky version to pass --compile-commands-dir to the LSP.
+    /// This seems to be initialized some time later, but I need
+    /// it availabe upon onInitialize().
+    /// Contains the full path to the directory.
+    std::optional<std::string> CompileCommandsDir;
   };
 
   ClangdLSPServer(Transport &Transp, const ThreadsafeFS &TFS,

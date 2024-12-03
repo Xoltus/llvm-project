@@ -697,6 +697,8 @@ void ClangdLSPServer::onInitialize(const InitializeParams &Params,
   // Apply settings after we're fully initialized.
   // This can start background indexing and in turn trigger LSP notifications.
   applyConfiguration(Params.initializationOptions.ConfigSettings);
+
+  Server->indexAllFiles(Opts.CompileCommandsDir);
 }
 
 void ClangdLSPServer::onInitialized(const InitializedParams &Params) {}

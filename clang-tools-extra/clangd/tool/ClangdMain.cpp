@@ -1023,6 +1023,26 @@ clangd accepts flags on the commandline, and in the CLANGD_FLAGS environment var
                                                 std::move(*Mappings));
   }
 
+  if (!CompileCommandsDir.empty()) {
+    if (llvm::sys::fs::exists(CompileCommandsDir)) {
+      // We support passing both relative and absolute paths to the
+      // --compile-commands-dir argument, but we assume the path is absolute
+      // in the rest of clangd so we make sure the path is absolute before
+      // continuing.
+      llvm::SmallString<128> Path(CompileCommandsDir);
+      if (std::error_code EC = llvm::sys::fs::make_absolute(Path)) {
+        elog("Error while converting the relative path specified by "
+              "--compile-commands-dir to an absolute path: {0}. The argument "
+              "will be ignored.",
+              EC.message());
+      } else {
+        Opts.CompileCommandsDir = Path.str().str();
+      }
+    } else {
+      elog("Path specified by --compile-commands-dir does not exist. The "
+            "argument will be ignored.");
+    }
+  }
   ClangdLSPServer LSPServer(*TransportLayer, TFS, Opts);
   llvm::set_thread_name("clangd.main");
   int ExitCode = LSPServer.run()
