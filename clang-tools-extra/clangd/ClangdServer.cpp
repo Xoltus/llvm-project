@@ -294,17 +294,18 @@ ClangdServer::~ClangdServer() {
 
 void ClangdServer::indexAllFiles(std::optional<std::string> Dir)
 {
-  if (!Dir) {
-    return;
+  std::string Path = "compile_commands.json";
+  if (Dir) {
+    Path = *Dir + "/compile_commands.json";
   }
 
-  std::string Path = *Dir + "/compile_commands.json";
   std::string ErrorMessage;
   auto CDB = tooling::JSONCompilationDatabase::loadFromFile(
       Path, ErrorMessage, tooling::JSONCommandLineSyntax::AutoDetect);
   if (CDB) {
     std::vector<std::string> Files = CDB->getAllFiles();
     this->BackgroundIdx->enqueue(Files);
+    log("ClangdServer::indexAllFiles enqueued {0} files for background indexing", Files.size());
   } else {
     llvm::errs() << "ClangdServer::indexAllFiles failed to open " << Path
                  << " with error " << ErrorMessage << "\n";
